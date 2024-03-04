@@ -1,6 +1,7 @@
-import {ethers} from "hardhat";
-import {BaseContract, BigNumberish, parseEther} from "ethers";
+import { ethers } from "hardhat";
+import { BigNumberish, parseEther} from "ethers";
 import type {HardhatEthersSigner} from "@nomicfoundation/hardhat-ethers/src/signers";
+import {OwnableUpgradeable, TokenMock} from "../typechain-types";
 
 const NFTPositionManagerABI =
   require("./abi/uniswap/periphery/NonfungiblePositionManager.json").abi;
@@ -10,13 +11,13 @@ const SwapRouterABI =
 const QuoterABI = require("./abi/uniswap/periphery/Quoter.json").abi;
 
 export const uniswapRouterAddress = process.env.UNISWAP_ROUTER_ADDRESS;
-export const uniswapQuoterAddress = process.env.UNISWAP_QOUTER_ADDRESS;
+export const uniswapQuoterAddress = process.env.UNISWAP_QUOTER_ADDRESS;
 export const uniswapNFTPositionManagerAddress = process.env.UNISWAP_POSITION_MANAGER_ADDRESS;
 
 export async function createPool(
   creator: HardhatEthersSigner,
-  token0: BaseContract,
-  token1: BaseContract,
+  token0: TokenMock,
+  token1: TokenMock,
   amount0: BigNumberish,
   amount1: BigNumberish,
   ownerAddress?: string | null
@@ -81,17 +82,17 @@ export async function createPool(
 }
 
 export function getExchangePath(
-  token0: BaseContract,
-  token1: BaseContract,
-  token2?: BaseContract
+  token0: TokenMock,
+  token1: TokenMock,
+  token2?: TokenMock
 ) {
   if (token2) {
-    return ethers.utils.solidityPack(
+    return ethers.solidityPacked(
       ["address", "uint24", "address", "uint24", "address"],
       [token0.target, 10000, token1.target, 10000, token2.target]
     );
   } else {
-    return ethers.utils.solidityPack(
+    return ethers.solidityPacked(
       ["address", "uint24", "address"],
       [token0.target, 10000, token1.target]
     );
@@ -111,31 +112,16 @@ function calculateSqrtPriceX96(token0Amount: BigNumberish, token1Amount: BigNumb
 }
 
 export async function getExactInput(
-  token0: BaseContract,
-  token1: BaseContract,
-  amount: BigNumber
-): Promise<BigNumber> {
-  const Quoter = await ethers.getContractAt(QuoterABI, uniswapQuoterAddress);
+  token0: TokenMock,
+  token1: TokenMock,
+  amount: BigNumberish
+): Promise<BigNumberish> {
+  const Quoter: OwnableUpgradeable = await ethers.getContractAt(QuoterABI, uniswapQuoterAddress);
 
   return (
-    await Quoter.callStatic.quoteExactInput(
+    await Quoter.quoteExactInput.staticCall(
       getExchangePath(token0, token1),
       amount
     )
   ).amountOut;
-}
-
-export async function getExactOutput(
-  token0: BaseContract,
-  token1: BaseContract,
-  amount: BigNumber
-): Promise<BigNumber> {
-  const Quoter = await ethers.getContractAt(QuoterABI, uniswapQuoterAddress);
-
-  return (
-    await Quoter.callStatic.quoteExactOutput(
-      getExchangePath(token0, token1),
-      amount
-    )
-  ).amountIn;
 }

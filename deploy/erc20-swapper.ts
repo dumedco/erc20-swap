@@ -13,10 +13,10 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 
 	const erc20Swapper = await ethers.getContractAt(
 		"ERC20Swapper",
-		await erc20SwapperDeploy.getAddress()
+		erc20SwapperDeploy.target
 	);
 
-	console.log("ERC20Swapper deployed at:", await erc20SwapperDeploy.getAddress());
+	console.log("ERC20Swapper deployed at:", erc20SwapperDeploy.target);
 };
 
 export default func;

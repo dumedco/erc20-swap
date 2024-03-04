@@ -10,8 +10,6 @@ import "../externalInterfaces/uniswapV3/IUniswapRouter02.sol";
 import "../externalInterfaces/weth/IWeth.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import "hardhat/console.sol";
-
 contract ERC20Swapper is
     Initializable,
     OwnableUpgradeable,
@@ -51,6 +49,14 @@ contract ERC20Swapper is
     event UniswapRouterUpdated(address indexed oldUniswapRouter, address indexed newUniswapRouter);
 
     /**
+     * @dev Triggered when weth has been updated
+     *
+     * @param oldUWethAddress    Old weth address
+     * @param newUWethAddress    New weth address
+     */
+    event WethUpdated(address indexed oldUWethAddress, address indexed newUWethAddress);
+
+    /**
      * @dev instantiates contract
      * @param ownerAddress The address of the owner
      * @param wethAddress The address of Wrapped Ether
@@ -77,11 +83,26 @@ contract ERC20Swapper is
         _unpause();
     }
 
+    /**
+     * @dev updates the address of the uniswapRouter contract
+     * @param _newUniswapRouterAddress The address of the uniswapRouter contract
+     */
     function updateUniswapRouter(address _newUniswapRouterAddress) external onlyOwner {
         address _oldAddress = address(uniswapRouter);
         uniswapRouter = IUniswapRouter02(_newUniswapRouterAddress);
 
         emit UniswapRouterUpdated(_oldAddress, _newUniswapRouterAddress);
+    }
+
+    /**
+     * @dev updates the address of the weth contract
+     * @param _newWethAddress The address of the weth contract
+     */
+    function updateWeth(address _newWethAddress) external onlyOwner {
+        address _oldAddress = address(weth);
+        weth = IWeth(_newWethAddress);
+
+        emit WethUpdated(_oldAddress, _newWethAddress);
     }
 
     /**
@@ -92,7 +113,6 @@ contract ERC20Swapper is
     */
     function swapEtherToToken(address token, uint minAmount) external payable override whenNotPaused nonReentrant returns (uint) {
         _getWeth();
-
         return _swapWethForToken(token, minAmount);
     }
 
@@ -102,13 +122,12 @@ contract ERC20Swapper is
         uint _wethBalanceAfter = weth.balanceOf(address(this));
 
         if (_wethBalanceAfter - _wethBalanceBefore < msg.value) {
-            revert InvalidWethReceivedAmount();     //todo: add test
+            revert InvalidWethReceivedAmount();
         }
     }
 
     function _swapWethForToken(address token, uint minAmount) internal returns(uint amount) {
         uint _tokenBalanceBefore = IERC20(token).balanceOf(msg.sender);
-
         weth.approve(address(uniswapRouter), msg.value);
 
         uniswapRouter.exactInputSingle(
@@ -128,7 +147,7 @@ contract ERC20Swapper is
         amount = _tokenBalanceAfter - _tokenBalanceBefore;
 
         if (amount < minAmount) {
-            revert InvalidTokenReceivedAmount();     //todo: add test
+            revert InvalidTokenReceivedAmount();
         }
 
         emit EthSwapped(token, msg.sender, msg.value, amount);

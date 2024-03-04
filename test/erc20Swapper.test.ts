@@ -1,10 +1,11 @@
 import chai, {should} from "chai";
 import chaiAsPromised from "chai-as-promised";
 import {createPool, getExactInput, uniswapRouterAddress,} from "../utils/uniswap";
-import {ethers, upgrades} from "hardhat";
+import {config, ethers, upgrades} from "hardhat";
 import type {HardhatEthersSigner} from "@nomicfoundation/hardhat-ethers/src/signers";
-import {BaseContract, formatEther, parseEther} from "ethers";
-import {ERC20Swapper, IWeth, TokenMock} from "../typechain-types";
+import {parseEther} from "ethers";
+import {ERC20Swapper, ERC20SwapperTest, TokenMock, WethMock} from "../typechain-types";
+import hardhatConfig from "../hardhat.config";
 
 chai.use(chaiAsPromised);
 should();
@@ -20,7 +21,7 @@ describe("ERC20Swapper", () => {
   let token1: TokenMock;
   let token2: TokenMock;
   let token3: TokenMock;
-  let weth: TokenMock;
+  let weth: WethMock;
   let erc20Swapper: ERC20Swapper;
 
   const initialERC20SwapperToken1Balance = parseEther('1000000');
@@ -60,11 +61,11 @@ describe("ERC20Swapper", () => {
     token2 = await tokenFactory.deploy("Token1", "Token1");
     token3 = await tokenFactory.deploy("Token2", "Token2");
     weth = await ethers.getContractAt(
-      "TokenMock",
+      "WethMock",
       process.env.WETH_ADDRESS
     );
 
-    await token1.mint(erc20Swapper.target, initialERC20SwapperToken1Balance);
+    await token1.mint(erc20Swapper, initialERC20SwapperToken1Balance);
     await token1.mint(user1, initialUser1Token1Balance);
     await token1.mint(user2, initialUser2Token1Balance);
     await token2.mint(erc20Swapper, initialERC20SwapperToken2Balance);
@@ -73,6 +74,8 @@ describe("ERC20Swapper", () => {
     await token3.mint(erc20Swapper, initialERC20SwapperToken3Balance);
     await token3.mint(user1, initialUser1Token3Balance);
     await token3.mint(user2, initialUser2Token3Balance);
+
+    await ethers.provider.send("hardhat_setBalance", [deployer.address, '0x1111111111111111111111111111111111111111']);
 
     await createPools();
 
@@ -135,6 +138,25 @@ describe("ERC20Swapper", () => {
       const newUniswapRouterAddress = '0x0000000000000000000000000000000000000001'
       await erc20Swapper.connect(user1)
         .updateUniswapRouter(newUniswapRouterAddress)
+        .should.be.rejectedWith(`OwnableUnauthorizedAccount("${user1.address}")`);
+    });
+
+    it("Should update weth if owner", async function () {
+      const newWethAddress = '0x0000000000000000000000000000000000000001';
+      (await erc20Swapper.weth()).should.eq(process.env.WETH_ADDRESS);
+
+      await erc20Swapper.connect(owner)
+        .updateWeth(newWethAddress)
+        .should.emit(erc20Swapper, 'WethUpdated')
+        .withArgs(process.env.WETH_ADDRESS, newWethAddress);
+
+      (await erc20Swapper.weth()).should.eq(newWethAddress);
+    });
+
+    it("Should not update weth if not owner", async function () {
+      const newWethAddress = '0x0000000000000000000000000000000000000001'
+      await erc20Swapper.connect(user1)
+        .updateWeth(newWethAddress)
         .should.be.rejectedWith(`OwnableUnauthorizedAccount("${user1.address}")`);
     });
 
@@ -218,6 +240,58 @@ describe("ERC20Swapper", () => {
       (await token2.balanceOf(user2)).should.eq(initialUser2Token2Balance + amountOut);
     });
 
+    it("Should receive at least minAmount tokens", async function () {
+      const amountIn = parseEther('1');
+      const amountOut = parseEther('0.980295078720665412');
+      const amountOutMin = parseEther('0.98');
+
+      (await getExactInput(weth, token1, amountIn)).should.eq(
+        amountOut,
+        'Uniswap has changed swap price formula'
+      );
+
+      await erc20Swapper.connect(user1)
+        .swapEtherToToken(token1, parseEther('0.9'), {value: amountIn})
+        .should.be.fulfilled;
+
+
+      (await token1.balanceOf(user1)).should.gte(initialUser1Token1Balance + amountOutMin);
+    });
+
+    it("Should swap when amountOutMin == amountReceived ", async function () {
+      const amountIn = parseEther('1');
+      const amountOut = parseEther('0.980295078720665412');
+      const amountOutMin = amountOut;
+
+      (await getExactInput(weth, token1, amountIn)).should.eq(
+        amountOut,
+        'Uniswap has changed swap price formula'
+      );
+
+      await erc20Swapper.connect(user1)
+        .swapEtherToToken(token1, parseEther('0.9'), {value: amountIn})
+        .should.be.fulfilled;
+
+
+      (await token1.balanceOf(user1)).should.gte(initialUser1Token1Balance + amountOutMin);
+    });
+
+    it("Should swap custom token for eth #2", async function () {
+      const amountIn = parseEther('10');
+      const amountOut = parseEther('180.163785259326669089');
+
+      (await getExactInput(weth, token2, amountIn)).should.eq(
+        amountOut,
+        'Uniswap has changed swap price formula'
+      );
+
+      await erc20Swapper.connect(user2)
+        .swapEtherToToken(token2, parseEther('150'), {value: amountIn})
+        .should.be.fulfilled;
+
+      (await token2.balanceOf(user2)).should.eq(initialUser2Token2Balance + amountOut);
+    });
+
     it("Should emit event when swapping #1", async function () {
       const amountIn = parseEther('1');
       const amountOut = parseEther('0.980295078720665412');
@@ -253,8 +327,8 @@ describe("ERC20Swapper", () => {
     });
 
     it("Should return amountOut when swapping #1", async function () {
-      const amountIn = parseEther('1');
-      const amountOut = parseEther('0.980295078720665412');
+      const amountIn = parseEther('2');
+      const amountOut = parseEther('1.941557168072171013');
 
       (await getExactInput(weth, token1, amountIn)).should.eq(
         amountOut,
@@ -262,13 +336,13 @@ describe("ERC20Swapper", () => {
       );
 
       (await erc20Swapper.connect(user1)
-        .swapEtherToToken.staticCall(token1, parseEther('0.9'), {value: amountIn}))
+        .swapEtherToToken.staticCall(token1, parseEther('1.9'), {value: amountIn}))
         .should.eq(amountOut);
     });
 
-    it("Should emit event when swapping #2", async function () {
-      const amountIn = parseEther('0.5');
-      const amountOut = parseEther('9.851236379919399482');
+    it("Should return amountOut when swapping #2", async function () {
+      const amountIn = parseEther('5');
+      const amountOut = parseEther('94.330633635064320995');
 
       (await getExactInput(weth, token2, amountIn)).should.eq(
         amountOut,
@@ -276,8 +350,305 @@ describe("ERC20Swapper", () => {
       );
 
       (await erc20Swapper.connect(user2)
-        .swapEtherToToken.staticCall(token2, parseEther('9'), {value: amountIn}))
+        .swapEtherToToken.staticCall(token2, parseEther('94'), {value: amountIn}))
         .should.eq(amountOut);
     });
+
+    it("Should revert when user doesn't have enough eth", async function () {
+      const amountIn = parseEther('10000');
+      const amountOut = parseEther('99.000000000000000004');
+      const minAmountOut = parseEther('99');
+
+      (await getExactInput(weth, token1, amountIn)).should.eq(
+        amountOut,
+        'Uniswap has changed swap price formula'
+      );
+
+      await erc20Swapper.connect(user2)
+        .swapEtherToToken(token2, minAmountOut, {value: amountIn})
+        .should.be.rejectedWith(new RegExp('sender doesn\'t have enough funds to send tx\. The max upfront cost is: .*'));
+    });
   });
+
+  describe("ERC20Swapper - uniswap reverts", () => {
+    before(async function () {
+    });
+
+    beforeEach(async () => {
+      await deploy();
+    });
+
+    it("Should revert when amountOut is smaller them minAmount", async function () {
+      const amountIn = parseEther('5');
+      const amountOut = parseEther('94.330633635064320995');
+      const minAmountOut = parseEther('95');
+
+      (await getExactInput(weth, token2, amountIn)).should.eq(
+        amountOut,
+        'Uniswap has changed swap price formula'
+      );
+
+      await erc20Swapper.connect(user2)
+        .swapEtherToToken(token2, minAmountOut, {value: amountIn})
+        .should.be.rejectedWith('Too little received');
+    });
+
+    it("Should revert when there is no weth-token pair", async function () {
+      const amountIn = parseEther('1');
+      const amountOut = parseEther('1');
+      const minAmountOut = parseEther('1');
+
+      await erc20Swapper.connect(user2)
+        .swapEtherToToken(token3, minAmountOut, {value: amountIn})
+        .should.be.rejected;
+    });
+  });
+
+  describe("ERC20Swapper - uniswap is malicious #1", () => {
+    before(async function () {
+    });
+
+    beforeEach(async () => {
+      [deployer, owner, user1, user2, user3, user4] = await ethers.getSigners();
+
+      const uniswapRouterFactory = await ethers.getContractFactory("UniswapRouterMock");
+      const uniswapRouter = await uniswapRouterFactory.deploy();
+
+      const erc20SwapperDeploy = await upgrades.deployProxy(
+        await ethers.getContractFactory("ERC20Swapper"),
+        [
+          owner.address,
+          process.env.WETH_ADDRESS,
+          uniswapRouter.target
+        ]);
+
+      erc20Swapper = await ethers.getContractAt(
+        "ERC20Swapper",
+        erc20SwapperDeploy.target
+      );
+
+      const tokenFactory = await ethers.getContractFactory("TokenMock");
+      token1 = await tokenFactory.deploy("Token0", "Token0");
+      token2 = await tokenFactory.deploy("Token1", "Token1");
+      token3 = await tokenFactory.deploy("Token2", "Token2");
+      weth = await ethers.getContractAt(
+        "WethMock",
+        process.env.WETH_ADDRESS
+      );
+
+      await token1.mint(erc20Swapper, initialERC20SwapperToken1Balance);
+      await token1.mint(user1, initialUser1Token1Balance);
+      await token1.mint(uniswapRouter, parseEther('1000000000'))
+    });
+
+    it("Should revert when amountOut received from uniswap is smaller them minAmount", async function () {
+      const amountIn = parseEther('1');
+      const amountOut = parseEther('0.5');
+      const minAmountOut = parseEther('9.5');
+
+      await erc20Swapper.connect(user2)
+        .swapEtherToToken(token1, minAmountOut, {value: amountIn})
+        .should.be.rejectedWith('InvalidTokenReceivedAmount()');
+    });
+  });
+
+  describe("ERC20Swapper - uniswap is malicious #2", () => {
+    before(async function () {
+    });
+
+    beforeEach(async () => {
+      [deployer, owner, user1, user2, user3, user4] = await ethers.getSigners();
+
+      const uniswapRouterFactory = await ethers.getContractFactory("UniswapRouterMock2");
+      const uniswapRouter = await uniswapRouterFactory.deploy();
+
+      const erc20SwapperDeploy = await upgrades.deployProxy(
+        await ethers.getContractFactory("ERC20Swapper"),
+        [
+          owner.address,
+          process.env.WETH_ADDRESS,
+          uniswapRouter.target
+        ]);
+
+      erc20Swapper = await ethers.getContractAt(
+        "ERC20Swapper",
+        erc20SwapperDeploy.target
+      );
+
+      uniswapRouter.updateErc20Swapper(erc20Swapper);
+
+      const tokenFactory = await ethers.getContractFactory("TokenMock");
+      token1 = await tokenFactory.deploy("Token0", "Token0");
+      token2 = await tokenFactory.deploy("Token1", "Token1");
+      token3 = await tokenFactory.deploy("Token2", "Token2");
+      weth = await ethers.getContractAt(
+        "WethMock",
+        process.env.WETH_ADDRESS
+      );
+
+      await token1.mint(erc20Swapper, initialERC20SwapperToken1Balance);
+      await token1.mint(user1, initialUser1Token1Balance);
+      await token1.mint(uniswapRouter, parseEther('1000000000'))
+    });
+
+    it("Should revert when uniswap tries reentrancy attack", async function () {
+      const amountIn = parseEther('1');
+      const minAmountOut = parseEther('9.5');
+
+      await erc20Swapper.connect(user2)
+        .swapEtherToToken(token1, minAmountOut, {value: amountIn})
+        .should.be.rejectedWith('ReentrancyGuardReentrantCall()');
+    });
+  });
+
+  describe("ERC20Swapper - weth is malicious #1", () => {
+    before(async function () {
+    });
+
+    beforeEach(async () => {
+      [deployer, owner, user1, user2, user3, user4] = await ethers.getSigners();
+
+      const wethFactory = await ethers.getContractFactory("WethMock");
+
+      weth = await wethFactory.deploy("Weth", "Weth");
+
+      const erc20SwapperDeploy = await upgrades.deployProxy(
+        await ethers.getContractFactory("ERC20Swapper"),
+        [
+          owner.address,
+          weth.target,
+          uniswapRouterAddress
+        ]);
+
+      erc20Swapper = await ethers.getContractAt(
+        "ERC20Swapper",
+        erc20SwapperDeploy.target
+      );
+
+      const tokenFactory = await ethers.getContractFactory("TokenMock");
+      token1 = await tokenFactory.deploy("Token0", "Token0");
+    });
+
+    it("Should revert when weth contract doesn't sent same omount of weth", async function () {
+      const amountIn = parseEther('1');
+      const amountOut = parseEther('0.980295078720665412');
+      const minAmountOut = parseEther('0.98');
+
+      await erc20Swapper.connect(user2)
+        .swapEtherToToken(token1, minAmountOut, {value: amountIn})
+        .should.be.rejectedWith('InvalidWethReceivedAmount()');
+    });
+  });
+
+  describe("ERC20Swapper - weth is malicious #2", () => {
+    before(async function () {
+    });
+
+    beforeEach(async () => {
+      [deployer, owner, user1, user2, user3, user4] = await ethers.getSigners();
+
+      const wethFactory = await ethers.getContractFactory("WethMock2");
+
+      const weth = await wethFactory.deploy("Weth", "Weth");
+
+      const erc20SwapperDeploy = await upgrades.deployProxy(
+        await ethers.getContractFactory("ERC20Swapper"),
+        [
+          owner.address,
+          weth.target,
+          uniswapRouterAddress
+        ]);
+
+      erc20Swapper = await ethers.getContractAt(
+        "ERC20Swapper",
+        erc20SwapperDeploy.target
+      );
+
+      weth.updateErc20Swapper(erc20Swapper);
+
+      const tokenFactory = await ethers.getContractFactory("TokenMock");
+      token1 = await tokenFactory.deploy("Token0", "Token0");
+    });
+
+    it("Should revert when weth tries reentrancy attack", async function () {
+      const amountIn = parseEther('1');
+      const minAmountOut = parseEther('9.5');
+
+      await erc20Swapper.connect(user2)
+        .swapEtherToToken(token1, minAmountOut, {value: amountIn})
+        .should.be.rejectedWith('ReentrancyGuardReentrantCall()');
+    });
+  });
+
+  describe("ERC20Swapper - Swap from other contract", () => {
+    let erc20SwapperTest: ERC20SwapperTest;
+
+    before(async function () {
+    });
+
+    beforeEach(async () => {
+      await deploy();
+
+      const erc20SwapperTesFactory = await ethers.getContractFactory("ERC20SwapperTest");
+      erc20SwapperTest = await erc20SwapperTesFactory.deploy(
+        erc20Swapper.target
+      );
+    });
+
+    it("Should call swap from another contract", async function () {
+      const initialEthAmount = parseEther('10');
+      const initialTokenAmount = parseEther('100000000');
+      const amountIn = parseEther('1');
+      const amountOut = parseEther('0.980295078720665412');
+      const amountOutMin = parseEther('0.98');
+
+      await user1.sendTransaction({
+        to: erc20SwapperTest,
+        value: initialEthAmount
+      });
+
+      await token1.mint(erc20SwapperTest, initialTokenAmount);
+
+      (await getExactInput(weth, token1, amountIn)).should.eq(
+        amountOut,
+        'Uniswap has changed swap price formula'
+      );
+
+      await erc20SwapperTest.connect(user1)
+        .testSwapEtherToToken(token1, amountIn, amountOutMin)
+        .should.be.fulfilled;
+
+      (await token1.balanceOf(erc20SwapperTest)).should.eq(initialTokenAmount + amountOut);
+      (await ethers.provider.getBalance(erc20SwapperTest)).should.eq(initialEthAmount - amountIn);
+    });
+
+    it.only("Should funds remain in the original account on revert", async function () {
+      const initialEthAmount = parseEther('10');
+      const initialTokenAmount = parseEther('100000000');
+      const amountIn = parseEther('1');
+      const amountOut = parseEther('0.980295078720665412');
+      const amountOutMin = parseEther('1');
+
+      await user1.sendTransaction({
+        to: erc20SwapperTest,
+        value: initialEthAmount
+      });
+
+      await token1.mint(erc20SwapperTest, initialTokenAmount);
+
+      (await getExactInput(weth, token1, amountIn)).should.eq(
+        amountOut,
+        'Uniswap has changed swap price formula'
+      );
+
+      await erc20SwapperTest.connect(user1)
+        .testSwapEtherToToken(token1, amountIn, amountOutMin)
+        .should.be.rejectedWith('Too little received');
+
+      (await token1.balanceOf(erc20SwapperTest)).should.eq(initialTokenAmount );
+      (await ethers.provider.getBalance(erc20SwapperTest)).should.eq(initialEthAmount);
+    });
+
+  });
+
 });

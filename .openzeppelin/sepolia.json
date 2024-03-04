@@ -2,28 +2,35 @@
   "manifestVersion": "3.2",
   "proxies": [
     {
-      "address": "0xF35984771730e9a6976cC3ab9337c98fB9C34dD8",
-      "txHash": "0xdcd7a02f696dce2cfa53daa6f1d71f35180e694f4f29ee59593a8634b24fba42",
-      "kind": "transparent"
-    },
-    {
-      "address": "0x904079c345aDa3210A0637231C98De925c4ea48B",
-      "txHash": "0x9fc8926e3d1a6eddca7f643dc319864b766e3afde3574bfe92bd9e1029caae9e",
-      "kind": "transparent"
-    },
-    {
-      "address": "0xbBE705D49cC77495ED26f290D0ec3a287c69ab15",
-      "txHash": "0x5fc4949060c39ceb2415238b1f63d53a37df68367af6b1a9aa586179e518d9d5",
+      "address": "0x59cb8d2ED656b0991ED5390721A7a83b177f5BA8",
+      "txHash": "0x81c4ec18ef3ce94bad2d3e7fb1da77a55615323241efcb4cf318dc100f96f63f",
       "kind": "transparent"
     }
   ],
   "impls": {
-    "14078385c7f3501ab2d3d2dbffa733dc8c317b357274a45b86bb09aed2f55f4c": {
-      "address": "0x5a74B973Bc966c2E7faC6420E334C0a8d7cdb80A",
-      "txHash": "0xfd63ba4675d50ed422f7af8cb2dcebf58507fc4bf904526c1ddb4f4b515ed06c",
+    "4d54c9255732dae206882c709f44be1a4dd3c9111ffb4b730e1d8ecf17276565": {
+      "address": "0x5Ad70433Ba1a24BeBAf560699d82F9E715658a70",
+      "txHash": "0x798578a2bb3aedc70aefb7908799678ea7e344c7646c4e8258ac5beec92b5a25",
       "layout": {
         "solcVersion": "0.8.24",
-        "storage": [],
+        "storage": [
+          {
+            "label": "uniswapRouter",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_contract(IUniswapRouter02)1252",
+            "contract": "ERC20Swapper",
+            "src": "contracts/erc20Swapper/ERC20Swapper.sol:20"
+          },
+          {
+            "label": "weth",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_contract(IWeth)1279",
+            "contract": "ERC20Swapper",
+            "src": "contracts/erc20Swapper/ERC20Swapper.sol:21"
+          }
+        ],
         "types": {
           "t_address": {
             "label": "address",
@@ -94,6 +101,14 @@
           "t_uint64": {
             "label": "uint64",
             "numberOfBytes": "8"
+          },
+          "t_contract(IUniswapRouter02)1252": {
+            "label": "contract IUniswapRouter02",
+            "numberOfBytes": "20"
+          },
+          "t_contract(IWeth)1279": {
+            "label": "contract IWeth",
+            "numberOfBytes": "20"
           }
         },
         "namespaces": {

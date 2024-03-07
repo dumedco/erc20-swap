@@ -2,11 +2,21 @@
 pragma solidity 0.8.24;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "../../externalInterfaces/uniswapV3/IUniswapRouter02.sol";
 import "../../erc20Swapper/IERC20Swapper.sol";
 
 //used only for testing
 contract UniswapRouterMock2 {
+    IUniswapRouter02 public originalUniswapRouter;
     address public erc20SwapperAddress;
+
+    constructor(address originalUniswapRouterAddress) {
+        originalUniswapRouter = IUniswapRouter02(originalUniswapRouterAddress);
+    }
+
+    function factory() external view returns(address) {
+        return originalUniswapRouter.factory();
+    }
 
     struct ExactInputSingleParams {
         address tokenIn;

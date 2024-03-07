@@ -1,11 +1,15 @@
 import chai, {should} from "chai";
 import chaiAsPromised from "chai-as-promised";
-import {createPool, getExactInput, uniswapRouterAddress,} from "../utils/uniswap";
-import {config, ethers, upgrades} from "hardhat";
+import {
+  createPool,
+  getExactInputSingle,
+  uniswapQuoterAddress,
+  uniswapRouterAddress,
+} from "../utils/uniswap";
+import {ethers, upgrades} from "hardhat";
 import type {HardhatEthersSigner} from "@nomicfoundation/hardhat-ethers/src/signers";
 import {parseEther} from "ethers";
 import {ERC20Swapper, ERC20SwapperTest, TokenMock, WethMock} from "../typechain-types";
-import hardhatConfig from "../hardhat.config";
 
 chai.use(chaiAsPromised);
 should();
@@ -48,7 +52,8 @@ describe("ERC20Swapper", () => {
       [
         owner.address,
         process.env.WETH_ADDRESS,
-        uniswapRouterAddress
+        uniswapRouterAddress,
+        uniswapQuoterAddress
       ]);
 
     erc20Swapper = await ethers.getContractAt(
@@ -95,7 +100,8 @@ describe("ERC20Swapper", () => {
       weth,
       token1,
       parseEther('100'),
-      parseEther('100')
+      parseEther('100'),
+      3000
     );
 
     await createPool(
@@ -103,7 +109,8 @@ describe("ERC20Swapper", () => {
       weth,
       token2,
       parseEther('100'),
-      parseEther('2000')
+      parseEther('2000'),
+      3000
     );
   }
 
@@ -212,7 +219,7 @@ describe("ERC20Swapper", () => {
       const amountIn = parseEther('1');
       const amountOut = parseEther('0.980295078720665412');
 
-      (await getExactInput(weth, token1, amountIn)).should.eq(
+      (await getExactInputSingle(weth, token1, amountIn, 10000)).should.eq(
         amountOut,
         'Uniswap has changed swap price formula'
       );
@@ -228,7 +235,7 @@ describe("ERC20Swapper", () => {
       const amountIn = parseEther('10');
       const amountOut = parseEther('180.163785259326669089');
 
-      (await getExactInput(weth, token2, amountIn)).should.eq(
+      (await getExactInputSingle(weth, token2, amountIn, 10000)).should.eq(
         amountOut,
         'Uniswap has changed swap price formula'
       );
@@ -245,7 +252,7 @@ describe("ERC20Swapper", () => {
       const amountOut = parseEther('0.980295078720665412');
       const amountOutMin = parseEther('0.98');
 
-      (await getExactInput(weth, token1, amountIn)).should.eq(
+      (await getExactInputSingle(weth, token1, amountIn, 10000)).should.eq(
         amountOut,
         'Uniswap has changed swap price formula'
       );
@@ -263,7 +270,7 @@ describe("ERC20Swapper", () => {
       const amountOut = parseEther('0.980295078720665412');
       const amountOutMin = amountOut;
 
-      (await getExactInput(weth, token1, amountIn)).should.eq(
+      (await getExactInputSingle(weth, token1, amountIn, 10000)).should.eq(
         amountOut,
         'Uniswap has changed swap price formula'
       );
@@ -280,7 +287,7 @@ describe("ERC20Swapper", () => {
       const amountIn = parseEther('10');
       const amountOut = parseEther('180.163785259326669089');
 
-      (await getExactInput(weth, token2, amountIn)).should.eq(
+      (await getExactInputSingle(weth, token2, amountIn, 10000)).should.eq(
         amountOut,
         'Uniswap has changed swap price formula'
       );
@@ -296,7 +303,7 @@ describe("ERC20Swapper", () => {
       const amountIn = parseEther('1');
       const amountOut = parseEther('0.980295078720665412');
 
-      (await getExactInput(weth, token1, amountIn)).should.eq(
+      (await getExactInputSingle(weth, token1, amountIn, 10000)).should.eq(
         amountOut,
         'Uniswap has changed swap price formula'
       );
@@ -313,7 +320,7 @@ describe("ERC20Swapper", () => {
       const amountIn = parseEther('0.5');
       const amountOut = parseEther('9.851236379919399482');
 
-      (await getExactInput(weth, token2, amountIn)).should.eq(
+      (await getExactInputSingle(weth, token2, amountIn, 10000)).should.eq(
         amountOut,
         'Uniswap has changed swap price formula'
       );
@@ -330,7 +337,7 @@ describe("ERC20Swapper", () => {
       const amountIn = parseEther('2');
       const amountOut = parseEther('1.941557168072171013');
 
-      (await getExactInput(weth, token1, amountIn)).should.eq(
+      (await getExactInputSingle(weth, token1, amountIn, 10000)).should.eq(
         amountOut,
         'Uniswap has changed swap price formula'
       );
@@ -344,7 +351,7 @@ describe("ERC20Swapper", () => {
       const amountIn = parseEther('5');
       const amountOut = parseEther('94.330633635064320995');
 
-      (await getExactInput(weth, token2, amountIn)).should.eq(
+      (await getExactInputSingle(weth, token2, amountIn, 10000)).should.eq(
         amountOut,
         'Uniswap has changed swap price formula'
       );
@@ -354,15 +361,47 @@ describe("ERC20Swapper", () => {
         .should.eq(amountOut);
     });
 
+    it.only("Should choose best pool #1", async function () {
+      const amountIn = parseEther('1');
+      const amountOut = parseEther('0.986743745639390012');
+      const amountOutMin = parseEther('0.98');
+
+      // await createPool(
+      //   deployer,
+      //   weth,
+      //   token1,
+      //   parseEther('100'),
+      //   parseEther('100'),
+      //   3000
+      // );
+      // await createPool(
+      //   deployer,
+      //   weth,
+      //   token1,
+      //   parseEther('100'),
+      //   parseEther('100'),
+      //   500
+      // );
+
+      // (await getExactInputSingle(weth, token1, amountIn, 10000)).should.eq(
+      //   amountOut,
+      //   'Uniswap has changed swap price formula'
+      // );
+
+      console.log('dddddddd')
+
+
+      await erc20Swapper.connect(user2)
+        .swapEtherToToken(token1, amountOutMin, {value: amountIn})
+        .should.be.rejectedWith('aaa');
+
+      (await token1.balanceOf(user1)).should.eq(initialUser1Token1Balance + amountOut);
+    });
+
     it("Should revert when user doesn't have enough eth", async function () {
       const amountIn = parseEther('10000');
       const amountOut = parseEther('99.000000000000000004');
       const minAmountOut = parseEther('99');
-
-      (await getExactInput(weth, token1, amountIn)).should.eq(
-        amountOut,
-        'Uniswap has changed swap price formula'
-      );
 
       await erc20Swapper.connect(user2)
         .swapEtherToToken(token2, minAmountOut, {value: amountIn})
@@ -383,7 +422,7 @@ describe("ERC20Swapper", () => {
       const amountOut = parseEther('94.330633635064320995');
       const minAmountOut = parseEther('95');
 
-      (await getExactInput(weth, token2, amountIn)).should.eq(
+      (await getExactInputSingle(weth, token2, amountIn, 10000)).should.eq(
         amountOut,
         'Uniswap has changed swap price formula'
       );
@@ -412,14 +451,15 @@ describe("ERC20Swapper", () => {
       [deployer, owner, user1, user2, user3, user4] = await ethers.getSigners();
 
       const uniswapRouterFactory = await ethers.getContractFactory("UniswapRouterMock");
-      const uniswapRouter = await uniswapRouterFactory.deploy();
+      const uniswapRouter = await uniswapRouterFactory.deploy(uniswapRouterAddress);
 
       const erc20SwapperDeploy = await upgrades.deployProxy(
         await ethers.getContractFactory("ERC20Swapper"),
         [
           owner.address,
           process.env.WETH_ADDRESS,
-          uniswapRouter.target
+          uniswapRouter.target,
+          uniswapQuoterAddress
         ]);
 
       erc20Swapper = await ethers.getContractAt(
@@ -438,7 +478,9 @@ describe("ERC20Swapper", () => {
 
       await token1.mint(erc20Swapper, initialERC20SwapperToken1Balance);
       await token1.mint(user1, initialUser1Token1Balance);
-      await token1.mint(uniswapRouter, parseEther('1000000000'))
+      await token1.mint(uniswapRouter, parseEther('1000000000'));
+
+      createPools();
     });
 
     it("Should revert when amountOut received from uniswap is smaller them minAmount", async function () {
@@ -460,14 +502,15 @@ describe("ERC20Swapper", () => {
       [deployer, owner, user1, user2, user3, user4] = await ethers.getSigners();
 
       const uniswapRouterFactory = await ethers.getContractFactory("UniswapRouterMock2");
-      const uniswapRouter = await uniswapRouterFactory.deploy();
+      const uniswapRouter = await uniswapRouterFactory.deploy(uniswapRouterAddress);
 
       const erc20SwapperDeploy = await upgrades.deployProxy(
         await ethers.getContractFactory("ERC20Swapper"),
         [
           owner.address,
           process.env.WETH_ADDRESS,
-          uniswapRouter.target
+          uniswapRouter.target,
+          uniswapQuoterAddress
         ]);
 
       erc20Swapper = await ethers.getContractAt(
@@ -488,7 +531,9 @@ describe("ERC20Swapper", () => {
 
       await token1.mint(erc20Swapper, initialERC20SwapperToken1Balance);
       await token1.mint(user1, initialUser1Token1Balance);
-      await token1.mint(uniswapRouter, parseEther('1000000000'))
+      await token1.mint(uniswapRouter, parseEther('1000000000'));
+
+      createPools();
     });
 
     it("Should revert when uniswap tries reentrancy attack", async function () {
@@ -517,7 +562,8 @@ describe("ERC20Swapper", () => {
         [
           owner.address,
           weth.target,
-          uniswapRouterAddress
+          uniswapRouterAddress,
+          uniswapQuoterAddress
         ]);
 
       erc20Swapper = await ethers.getContractAt(
@@ -556,7 +602,8 @@ describe("ERC20Swapper", () => {
         [
           owner.address,
           weth.target,
-          uniswapRouterAddress
+          uniswapRouterAddress,
+          uniswapQuoterAddress
         ]);
 
       erc20Swapper = await ethers.getContractAt(
@@ -609,7 +656,7 @@ describe("ERC20Swapper", () => {
 
       await token1.mint(erc20SwapperTest, initialTokenAmount);
 
-      (await getExactInput(weth, token1, amountIn)).should.eq(
+      (await getExactInputSingle(weth, token1, amountIn, 10000)).should.eq(
         amountOut,
         'Uniswap has changed swap price formula'
       );
@@ -622,7 +669,7 @@ describe("ERC20Swapper", () => {
       (await ethers.provider.getBalance(erc20SwapperTest)).should.eq(initialEthAmount - amountIn);
     });
 
-    it.only("Should funds remain in the original account on revert", async function () {
+    it("Should funds remain in the original account on revert", async function () {
       const initialEthAmount = parseEther('10');
       const initialTokenAmount = parseEther('100000000');
       const amountIn = parseEther('1');
@@ -636,7 +683,7 @@ describe("ERC20Swapper", () => {
 
       await token1.mint(erc20SwapperTest, initialTokenAmount);
 
-      (await getExactInput(weth, token1, amountIn)).should.eq(
+      (await getExactInputSingle(weth, token1, amountIn, 10000)).should.eq(
         amountOut,
         'Uniswap has changed swap price formula'
       );

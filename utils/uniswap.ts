@@ -20,6 +20,7 @@ export async function createPool(
   token1: TokenMock,
   amount0: BigNumberish,
   amount1: BigNumberish,
+  fee: number,
   ownerAddress?: string | null
 ): Promise<number> {
   const NFTPositionManager = await ethers.getContractAt(
@@ -40,21 +41,22 @@ export async function createPool(
     amount1 = amount0Copy;
   }
 
+  console.log('1111')
   await NFTPositionManager.connect(
     creator
   ).createAndInitializePoolIfNecessary(
     token0.target,
     token1.target,
-    10000,
-    // encodePriceSqrt(amount0, amount1),
-    calculateSqrtPriceX96(amount0, amount1),//'79228162514264337593543950336', //encodePriceSqrt(1, 1),   //price
+    fee,
+    calculateSqrtPriceX96(amount0, amount1),
     {gasLimit: 5000000}
-  );
+  ).should.be.fulfilled;
+  console.log('2222')
 
   await NFTPositionManager.connect(creator).mint({
     token0: token0.target,
     token1: token1.target,
-    fee: 10000,
+    fee: fee,
     tickLower: -887200,
     tickUpper: 887200,
     amount0Desired: amount0,
@@ -63,11 +65,13 @@ export async function createPool(
     amount1Min: 0, //don't let it 0 into production
     recipient: creator.address, // ownerAddress ? ownerAddress : creator.address,
     deadline: 1773341392,
-  });
+  }).should.be.rejectedWith('aaaaaaaa');
+  console.log('3333')
 
   const tokenId = await NFTPositionManager.tokenByIndex(
     Number(await NFTPositionManager.totalSupply()) - 1
   );
+  console.log('4444')
 
   if (ownerAddress) {
     // await NFTPositionManager.connect(creator).approve();
@@ -118,10 +122,31 @@ export async function getExactInput(
 ): Promise<BigNumberish> {
   const Quoter: OwnableUpgradeable = await ethers.getContractAt(QuoterABI, uniswapQuoterAddress);
 
+  console.log(getExchangePath(token0, token1));
   return (
     await Quoter.quoteExactInput.staticCall(
       getExchangePath(token0, token1),
       amount
+    )
+  ).amountOut;
+}
+
+export async function getExactInputSingle(
+  token0: TokenMock,
+  token1: TokenMock,
+  amount: BigNumberish,
+  fee: number,
+): Promise<BigNumberish> {
+  const Quoter: OwnableUpgradeable = await ethers.getContractAt(QuoterABI, uniswapQuoterAddress);
+
+  return (
+    await Quoter.quoteExactInputSingle.staticCall({
+        tokenIn: token0,
+        tokenOut: token1,
+        amountIn: amount,
+        fee: fee,
+        sqrtPriceLimitX96: 0
+      }
     )
   ).amountOut;
 }

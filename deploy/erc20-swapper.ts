@@ -8,7 +8,8 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 		[
 			process.env.OWNER_ADDRESS,
 			process.env.WETH_ADDRESS,
-			process.env.UNISWAP_ROUTER_ADDRESS
+			process.env.UNISWAP_ROUTER_ADDRESS,
+			process.env.UNISWAP_QUOTER_ADDRESS
 		]);
 
 	const erc20Swapper = await ethers.getContractAt(
